@@ -1,0 +1,220 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>de.trustable.scep.client</groupId>
+	<artifactId>scepClient</artifactId>
+	<version>1.0.0</version>
+	<packaging>jar</packaging>
+
+	<name>scepClient</name>
+	<description>Simple SCEP Client to request or revoke a certificate using the SCEP protocol, based on jscep</description>
+	
+	<url>https://github.com/kuehne-trustable-de/scepClient</url>
+
+	<licenses>
+		<license>
+			<name>European Union Public Licence (EUPL-1.2)</name>
+			<url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+		</license>
+	</licenses>
+
+	<developers>
+		<developer>
+			<name>Andreas Kuehne</name>
+			<email>kuehne@trustable.de</email>
+			<organization>trustable solutions UG</organization>
+			<organizationUrl>https://trustable.de</organizationUrl>
+		</developer>
+	</developers>
+
+	<scm>
+		<connection>https://github.com/kuehne-trustable-de/scepClient.git</connection>
+		<developerConnection>https://github.com/kuehne-trustable-de/scepClient.git</developerConnection>
+		<url>https://github.com/kuehne-trustable-de/scepClient.git</url>
+	</scm>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+
+        <maven-javadoc-plugin.version>3.2.0</maven-javadoc-plugin.version>
+
+		<jscepVersion>2.5.4</jscepVersion>
+
+		<bouncyCastleVersion>1.68</bouncyCastleVersion>
+		<cryptoUtilVersion>1.1.12</cryptoUtilVersion>
+		<slf4jSimpleVersion>1.7.30</slf4jSimpleVersion>
+
+	</properties>
+
+	<dependencies>
+
+		<!-- https://mvnrepository.com/artifact/com.google.code.jscep/jscep -->
+		<dependency>
+			<groupId>com.google.code.jscep</groupId>
+			<artifactId>jscep</artifactId>
+			<version>${jscepVersion}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>de.trustable</groupId>
+			<artifactId>cryptoUtil</artifactId>
+			<version>${cryptoUtilVersion}</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>${slf4jSimpleVersion}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>3.8.1</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcpkix-jdk15on</artifactId>
+				<version>${bouncyCastleVersion}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<repositories>
+        <repository>
+          <id>trustable.eu</id>
+          <url>https://trustable.eu/artifactory/ca3s</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+    </repositories>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>2.4</version>
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>de.trustable.scep.client.scepClient.SCEPClient</mainClass>
+							<addClasspath>true</addClasspath>
+							<classpathPrefix>dependency-jars/</classpathPrefix>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<version>2.5.1</version>
+				<executions>
+					<execution>
+						<id>copy-dependencies</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-dependencies</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/dependency-jars/</outputDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		    <plugin>
+		      <groupId>org.apache.maven.plugins</groupId>
+		      <artifactId>maven-source-plugin</artifactId>
+		      <executions>
+		        <execution>
+		          <id>attach-sources</id>
+		          <goals>
+		            <goal>jar</goal>
+		          </goals>
+		        </execution>
+		      </executions>
+		    </plugin>
+		    <plugin>
+	            <groupId>org.apache.maven.plugins</groupId>
+	            <artifactId>maven-assembly-plugin</artifactId>
+	            <version>3.3.0</version>
+	
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>de.trustable.scep.client.scepClient.SCEPClient</mainClass>
+						</manifest>
+					</archive>
+	                <descriptorRefs>
+	                    <descriptorRef>jar-with-dependencies</descriptorRef>
+	                </descriptorRefs>
+	            </configuration>
+	
+	            <executions>
+	                <execution>
+	                    <id>make-assembly</id>
+	                    <phase>package</phase>
+	                    <goals>
+	                        <goal>single</goal>
+	                    </goals>
+	                </execution>
+	            </executions>
+	
+	        </plugin>
+		    <plugin>
+		      <groupId>org.apache.maven.plugins</groupId>
+		      <artifactId>maven-javadoc-plugin</artifactId>
+              <version>${maven-javadoc-plugin.version}</version>
+              <configuration>
+                  <source>${maven.compiler.source}</source>
+                  <detectJavaApiLink>false</detectJavaApiLink>
+              </configuration>
+		      <executions>
+		        <execution>
+		          <id>attach-javadocs</id>
+		          <goals>
+		            <goal>jar</goal>
+		          </goals>
+		        </execution>
+		      </executions>
+		    </plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-gpg-plugin</artifactId>
+				<version>1.6</version>
+				<executions>
+					<execution>
+						<id>sign-artifacts</id>
+						<phase>deploy</phase>
+						<goals>
+							<goal>sign</goal>
+						</goals>
+						<configuration>
+							<keyname>${gpg.keyname}</keyname>
+							<passphraseServerId>${gpg.keyname}</passphraseServerId>
+							<gpgArguments>
+								<arg>--pinentry-mode</arg>
+								<arg>loopback</arg>
+							</gpgArguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>
