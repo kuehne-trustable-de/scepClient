@@ -1,7 +1,6 @@
 package de.trustable.scep.client.scepClient;
 
 import de.trustable.util.CryptoUtil;
-import org.bouncycastle.asn1.x509.CRLReason;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.jscep.client.Client;
@@ -9,17 +8,19 @@ import org.jscep.client.ClientException;
 import org.jscep.client.EnrollmentResponse;
 import org.jscep.client.verification.CertificateVerifier;
 import org.jscep.transaction.TransactionException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import javax.security.auth.x500.X500Principal;
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.*;
-import java.security.cert.*;
 import java.security.cert.Certificate;
-import java.util.ArrayList;
+import java.security.cert.*;
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
@@ -30,25 +31,23 @@ import java.util.concurrent.TimeUnit;
  */
 public class SCEPClient {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(SCEPClient.class);
-	public static final java.lang.String REQUEST = "Request";
-	public static final java.lang.String REVOKE = "Revoke";
-
-	SecureRandom secRandom = new SecureRandom();
-
 	private String scepSecret = "foo123";
 	private String caUrl = "http://localhost:8080/ca3sScep/test";
 	private String keystoreAlias = "test";
 	private char[] keystorePassphrase;
 	private KeyStore keystore;
 	private File keystoreFile;
+	private boolean verifyCertificates;
+	private boolean verbose = false;
 
 
 	private SCEPClient() {
-        java.security.Security.addProvider( new BouncyCastleProvider() );
+
+		java.security.Security.addProvider( new BouncyCastleProvider() );
 	}
 	
-	public SCEPClient(String caUrl, String scepSecret, String keystoreAlias, char[] keystorePassphrase, KeyStore keystore, File keystoreFile) {
+	public SCEPClient(String caUrl, String scepSecret, String keystoreAlias, char[] keystorePassphrase,
+					  KeyStore keystore, File keystoreFile, boolean verifyCertificates, boolean verbose ) {
 		this();
 		
 		this.caUrl = caUrl;
@@ -57,6 +56,8 @@ public class SCEPClient {
 		this.keystoreAlias = keystoreAlias;
 		this.keystorePassphrase = keystorePassphrase;
 		this.keystoreFile = keystoreFile;
+		this.verifyCertificates = verifyCertificates;
+		this.verbose = verbose;
 	}
 
 
@@ -72,17 +73,16 @@ public class SCEPClient {
 	
 	public static int handleArgs(String[] args) throws KeyStoreException, CertificateException, IOException, NoSuchAlgorithmException {
 	
-		String mode = "Request";
-
 		String caUrl = null;
 		String scepSecret = null;
 		String keystoreAlias = null;
-		String reason = "unspecified";
 		String requestedDN = "CN=test certificate";
 		String keystoreFilename = "keystore.p12";
 		String keystoreType = "PKCS12";
 		char[] keystorePassphrase = null;
-		String certFile = "test.crt";
+		boolean verifyCertificates = true;
+		boolean verbose = false;
+
 
 		if( args.length == 0) {
 			printHelp();
@@ -96,6 +96,10 @@ public class SCEPClient {
 			if( "-h".equals(arg)) {
 				printHelp();
 				return 0;
+			} else if( "-i".equals(arg)) {
+				verifyCertificates = false;
+			} else if( "-v".equals(arg)) {
+				verbose = true;
 			} else {
 				if( nextArgPresent ) {
 					i++;
@@ -163,7 +167,7 @@ public class SCEPClient {
 		}
 
 		try {
-			SCEPClient client = new SCEPClient( caUrl, scepSecret, keystoreAlias, keystorePassphrase, keystore, keystoreFile);
+			SCEPClient client = new SCEPClient( caUrl, scepSecret, keystoreAlias, keystorePassphrase, keystore, keystoreFile, verifyCertificates, verbose);
 			client.signCertificateRequest(requestedDN);
 		} catch(GeneralSecurityException | IOException | TransactionException | ClientException ex) {
 			System.err.println("problem occured: " + ex.getLocalizedMessage());
@@ -172,7 +176,7 @@ public class SCEPClient {
 		return 0;
 	}
 
-	private static void printHelp() {
+	static void printHelp() {
 		System.out.println("\nSimple SCEP Client\n");
 		
 		System.out.println("Options:\n");
@@ -185,10 +189,12 @@ public class SCEPClient {
 		System.out.println("-p passphrase\tpassphrase of the keystore (required)");
 		System.out.println("-a alias\talias of the keystore element (required)");
 		System.out.println("-d DN\tdestinguished name of the certificate to be created");
-		
+
+		System.out.println("-v verbose\tenable verbose log output");
+
 	}
 
-	public X509Certificate signCertificateRequest(final String requestedDN)
+	X509Certificate signCertificateRequest(final String requestedDN)
 			throws GeneralSecurityException, IOException, TransactionException, ClientException {
 
 		X500Principal requestedPrincipal = new X500Principal(requestedDN);
@@ -199,7 +205,7 @@ public class SCEPClient {
 
 		Client client = getClient();
 
-		LOGGER.info("ephemeralCert : " + ephemeralCert);
+		trace("ephemeralCert : " + ephemeralCert);
 
 		PKCS10CertificationRequest csr = CryptoUtil.getCsr(requestedPrincipal,
 				keyPair.getPublic(),
@@ -209,7 +215,7 @@ public class SCEPClient {
 		EnrollmentResponse resp = client.enrol(ephemeralCert, keyPair.getPrivate(), csr);
 
 		if(resp.isFailure()) {
-			LOGGER.info("request failed: " + resp.getFailInfo() );
+			log("request failed: " + resp.getFailInfo() );
 			throw new ClientException(resp.getFailInfo().toString());
 		}
 
@@ -218,7 +224,7 @@ public class SCEPClient {
 			try {
 				TimeUnit.SECONDS.sleep(1);
 			} catch (InterruptedException e) {
-				LOGGER.info("InterruptedException: " + e.getMessage() );
+				trace("InterruptedException: " + e.getMessage() );
 			}
 			resp = client.poll(ephemeralCert, keyPair.getPrivate(), new X500Principal(csr.getSubject().toString()), resp.getTransactionId());
 		}
@@ -247,12 +253,67 @@ public class SCEPClient {
 		throw new ClientException("request failed, no certificate returned");
 	}
 
-	private Client getClient() throws MalformedURLException {
+	Client getClient() throws MalformedURLException {
 		URL serverUrl = new URL(caUrl);
-		LOGGER.debug("scep serverUrl : " + serverUrl);
+		trace("scep serverUrl : " + serverUrl);
 
-		CertificateVerifier acceptAllVerifier = new AcceptAllVerifier();
-		return new Client(serverUrl, acceptAllVerifier);
+		CertificateVerifier trustAllCertificateVerifier = new CertificateVerifier() {
+			@Override
+			public boolean verify(X509Certificate x509Certificate) {
+				return true;
+			}
+		};
+
+		Client trustAllClient = new Client(serverUrl, trustAllCertificateVerifier);
+
+		if(verifyCertificates){
+			CertificateVerifier certificateVerifier = new CertificateVerifier() {
+				@Override
+				public boolean verify(X509Certificate x509Certificate) {
+
+					try {
+						TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+						tmf.init((KeyStore) null);
+						X509TrustManager tm = (X509TrustManager) tmf.getTrustManagers()[0];
+						X509Certificate[] certArr = new X509Certificate[1];
+						certArr[0] = x509Certificate;
+						tm.checkClientTrusted(certArr, "RSA");
+						return true;
+					} catch ( NoSuchAlgorithmException | KeyStoreException | CertificateException e) {
+						warn("scep server certificate verification failed", e);
+					}
+					return false;
+				}
+			};
+			return new Client(serverUrl, certificateVerifier);
+		}else {
+			warn("INSECURE OPERATION : CA certificates not verified!");
+			return trustAllClient;
+		}
+	}
+
+	void warn(String msg){
+		System.err.println(msg);
+	}
+
+	void warn(String msg, Exception e){
+		System.err.println(msg);
+		e.printStackTrace();
+	}
+
+	void log(String msg){
+		System.out.println(msg);
+	}
+
+	void log(String msg, Exception e){
+		System.out.println(msg);
+		e.printStackTrace();
+	}
+
+	void trace(String msg){
+		if(verbose) {
+			System.out.println(msg);
+		}
 	}
 
 }

@@ -45,7 +45,7 @@
 
 		<jscepVersion>2.5.4</jscepVersion>
 
-		<bouncyCastleVersion>1.68</bouncyCastleVersion>
+		<bouncyCastleVersion>1.69</bouncyCastleVersion>
 		<cryptoUtilVersion>1.1.12</cryptoUtilVersion>
 		<slf4jSimpleVersion>1.7.30</slf4jSimpleVersion>
 
@@ -67,11 +67,18 @@
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
-		<dependency>
+		<!--dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-simple</artifactId>
 			<version>${slf4jSimpleVersion}</version>
 		</dependency>
+
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+			<version>2.14.1</version>
+		</dependency-->
+
 
 		<dependency>
 			<groupId>junit</groupId>
