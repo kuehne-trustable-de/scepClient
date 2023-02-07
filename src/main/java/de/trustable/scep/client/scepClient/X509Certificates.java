@@ -54,7 +54,7 @@ public class X509Certificates {
     }
 
     private static String sigAlg(KeyPair keyPair) {
-        return "SHA1with" + keyPair.getPrivate().getAlgorithm();
+        return "SHA256with" + keyPair.getPrivate().getAlgorithm();
     }
 }
 
