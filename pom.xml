@@ -46,7 +46,7 @@
 		<jscepVersion>2.5.5</jscepVersion>
 
 		<bouncyCastleVersion>1.70</bouncyCastleVersion>
-		<cryptoUtilVersion>1.3.13</cryptoUtilVersion>
+		<cryptoUtilVersion>1.3.24</cryptoUtilVersion>
 		<slf4jSimpleVersion>1.7.30</slf4jSimpleVersion>
 
 	</properties>
