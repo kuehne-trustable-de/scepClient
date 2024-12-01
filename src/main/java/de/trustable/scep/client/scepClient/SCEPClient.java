@@ -1,6 +1,7 @@
 package de.trustable.scep.client.scepClient;
 
 import de.trustable.util.CryptoUtil;
+import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.jscep.client.Client;
@@ -21,7 +22,9 @@ import java.net.URL;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.*;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 
@@ -32,11 +35,14 @@ import java.util.concurrent.TimeUnit;
 public class SCEPClient {
 
 	private String scepSecret = "foo123";
+	private int keyLength;
 	private String caUrl = "http://localhost:8080/ca3sScep/test";
 	private String keystoreAlias = "test";
 	private char[] keystorePassphrase;
 	private KeyStore keystore;
 	private File keystoreFile;
+	private KeyStore truststore;
+
 	private boolean verifyCertificates;
 	private boolean verbose = false;
 
@@ -46,17 +52,23 @@ public class SCEPClient {
 		java.security.Security.addProvider( new BouncyCastleProvider() );
 	}
 	
-	public SCEPClient(String caUrl, String scepSecret, String keystoreAlias, char[] keystorePassphrase,
-					  KeyStore keystore, File keystoreFile, boolean verifyCertificates, boolean verbose ) {
+	public SCEPClient(String caUrl, String scepSecret, int keyLength,
+					  String keystoreAlias, char[] keystorePassphrase,
+					  KeyStore keystore, File keystoreFile,
+					  boolean verifyCertificates,
+					  KeyStore truststore,
+					  boolean verbose ) {
 		this();
 		
 		this.caUrl = caUrl;
 		this.scepSecret = scepSecret;
+		this.keyLength = keyLength;
 		this.keystore = keystore;
 		this.keystoreAlias = keystoreAlias;
 		this.keystorePassphrase = keystorePassphrase;
 		this.keystoreFile = keystoreFile;
 		this.verifyCertificates = verifyCertificates;
+		this.truststore = truststore;
 		this.verbose = verbose;
 	}
 
@@ -77,9 +89,16 @@ public class SCEPClient {
 		String scepSecret = null;
 		String keystoreAlias = null;
 		String requestedDN = "CN=test certificate";
+		List<GeneralName> gnList = new ArrayList<>();
+		String keyLengthString = "2048";
 		String keystoreFilename = "keystore.p12";
 		String keystoreType = "PKCS12";
 		char[] keystorePassphrase = null;
+
+		String truststoreFilename = "";
+		String truststoreType = "PKCS12";
+		char[] truststorePassphrase = "changeit".toCharArray();
+
 		boolean verifyCertificates = true;
 		boolean verbose = false;
 
@@ -112,10 +131,20 @@ public class SCEPClient {
 						keystoreAlias = nArg;
 					} else if( "-d".equals(arg)) {
 						requestedDN = nArg;
+					} else if( "-n".equals(arg)) {
+						gnList.add(new GeneralName(GeneralName.dNSName, nArg));
+					} else if( "-l".equals(arg)) {
+						keyLengthString = nArg;
 					} else if( "-k".equals(arg)) {
 						keystoreFilename = nArg;
 					} else if( "-p".equals(arg)) {
 						keystorePassphrase = nArg.toCharArray();
+					} else if( "-tf".equals(arg)) {
+						truststoreFilename = nArg;
+					} else if( "-tt".equals(arg)) {
+						truststoreType = nArg;
+					} else if( "-tp".equals(arg)) {
+						truststorePassphrase = nArg.toCharArray();
 					}
 
 				}else {
@@ -166,11 +195,42 @@ public class SCEPClient {
 			}
 		}
 
+		KeyStore truststore = null;
+
+		if( truststoreFilename != null && !truststoreFilename.trim().isEmpty()) {
+			truststore = KeyStore.getInstance(truststoreType);
+			File truststoreFile = new File(truststoreFilename);
+			if (!truststoreFile.exists()) {
+				System.err.println("truststore file '" + truststoreFilename + "' does not exist! Exiting ...");
+				return 1;
+			} else {
+
+				if (!truststoreFile.canRead()) {
+					System.err.println("No read access to truststore file '" + truststoreFilename + "'! Exiting ...");
+					return 1;
+				}
+
+				try (FileInputStream tis = new FileInputStream(truststoreFile)) {
+					truststore.load(tis, truststorePassphrase);
+				}
+			}
+		}
+
+		int keyLength = Integer.parseInt(keyLengthString);
 		try {
-			SCEPClient client = new SCEPClient( caUrl, scepSecret, keystoreAlias, keystorePassphrase, keystore, keystoreFile, verifyCertificates, verbose);
-			client.signCertificateRequest(requestedDN);
+			SCEPClient client = new SCEPClient(caUrl,
+					scepSecret,
+					keyLength,
+					keystoreAlias,
+					keystorePassphrase,
+					keystore,
+					keystoreFile,
+					verifyCertificates,
+					truststore,
+					verbose);
+			client.signCertificateRequest(requestedDN, gnList.toArray(new GeneralName[0]));
 		} catch(GeneralSecurityException | IOException | TransactionException | ClientException ex) {
-			System.err.println("problem occured: " + ex.getLocalizedMessage());
+			System.err.println("problem occurred: " + ex.getLocalizedMessage());
 		}
 
 		return 0;
@@ -185,21 +245,29 @@ public class SCEPClient {
 		System.out.println("\nArguments:\n");
 		System.out.println("-u caURL\tCA URL (required)");
 		System.out.println("-s secret\tSCEP access secret (required)");
+		System.out.println("-l key length\tkey length (default: 2048)");
 		System.out.println("-k keystore\tfile name of the keystore (required)");
 		System.out.println("-p passphrase\tpassphrase of the keystore (required)");
 		System.out.println("-a alias\talias of the keystore element (required)");
-		System.out.println("-d DN\tdestinguished name of the certificate to be created");
+		System.out.println("-d DN\tdistinguished name of the certificate to be created");
 
+		System.out.println("-tf truststore\tfile name of the truststore");
+		System.out.println("-tt truststore type\tcontainer type of truststore, default: 'PKCS12'");
+		System.out.println("-tp truststore passphrase\tpassphrase of truststore, default: 'changeit'");
+
+		System.out.println("-i ignore\tignore certificate validation problems, make truststore settings redundant");
 		System.out.println("-v verbose\tenable verbose log output");
 
 	}
 
-	X509Certificate signCertificateRequest(final String requestedDN)
+	X509Certificate signCertificateRequest(final String requestedDN, final GeneralName[] sanArr)
 			throws GeneralSecurityException, IOException, TransactionException, ClientException {
 
 		X500Principal requestedPrincipal = new X500Principal(requestedDN);
 		X500Principal enrollingPrincipal = new X500Principal("CN=SCEPRequested_" + System.currentTimeMillis() + ",O=trustable solutions,C=DE");
-		KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+		KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+		keyPairGenerator.initialize(keyLength);
+		KeyPair keyPair = keyPairGenerator.generateKeyPair();
 		X509Certificate ephemeralCert = X509Certificates.createEphemeral(enrollingPrincipal, keyPair);
 
 
@@ -210,7 +278,9 @@ public class SCEPClient {
 		PKCS10CertificationRequest csr = CryptoUtil.getCsr(requestedPrincipal,
 				keyPair.getPublic(),
 				keyPair.getPrivate(),
-				this.scepSecret.toCharArray());
+				this.scepSecret.toCharArray(),
+				null,
+				sanArr);
 
 		EnrollmentResponse resp = client.enrol(ephemeralCert, keyPair.getPrivate(), csr);
 
@@ -273,7 +343,7 @@ public class SCEPClient {
 
 					try {
 						TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-						tmf.init((KeyStore) null);
+						tmf.init(truststore);
 						X509TrustManager tm = (X509TrustManager) tmf.getTrustManagers()[0];
 						X509Certificate[] certArr = new X509Certificate[1];
 						certArr[0] = x509Certificate;
